@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#111827" />
+  <title>Chess — Browser Edition</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b1220; --panel:#111c2e; --muted:#91a0b8; --text:#edf3ff; --accent:#78a9ff; --light:#e8edf5; --dark:#71849f; }
+    * { box-sizing:border-box }
+    body { margin:0; min-height:100vh; font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif; background:radial-gradient(circle at 15% 0%,#1b3150 0,transparent 35%),var(--bg); color:var(--text); display:flex; justify-content:center; padding:28px 16px; }
+    .app { width:min(1100px,100%); }
+    header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:22px; }
+    .brand { display:flex; align-items:center; gap:12px; }
+    .logo { width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,#9bc3ff,#4f78bd);display:grid;place-items:center;color:#101a2b;font-size:28px;font-weight:800; }
+    h1 { margin:0;font-size:clamp(22px,4vw,32px);letter-spacing:-.7px }
+    .sub { color:var(--muted);font-size:13px;margin-top:3px }
+    .layout { display:grid;grid-template-columns:minmax(280px,680px) minmax(250px,1fr);gap:22px;align-items:start }
+    .board-wrap,.side { background:rgba(17,28,46,.92);border:1px solid #293951;border-radius:20px;padding:16px;box-shadow:0 18px 55px #0004; }
+    .board { width:100%;aspect-ratio:1;display:grid;grid-template-columns:repeat(8,1fr);overflow:hidden;border-radius:12px;user-select:none; }
+    .square { position:relative;display:grid;place-items:center;aspect-ratio:1;cursor:pointer;font-size:clamp(25px,5.7vw,58px);line-height:1; }
+    .light { background:var(--light) }.dark { background:var(--dark) }
+    .piece { filter:drop-shadow(0 2px 1px #0005);cursor:pointer; }
+    .white-piece { color:#fff;text-shadow:0 1px 2px #172033,1px 0 #172033,-1px 0 #172033,0 -1px #172033; }
+    .black-piece { color:#182235;text-shadow:0 1px 1px #fff7; }
+    .selected { box-shadow:inset 0 0 0 4px #f5d76e; }
+    .last { background-image:linear-gradient(#e6d35c77,#e6d35c77); }
+    .checked { background-image:linear-gradient(#e65c5cbb,#e65c5cbb); }
+    .target:after { content:"";position:absolute;width:23%;height:23%;border-radius:50%;background:#193c2e88; }
+    .capture:after { content:"";position:absolute;inset:5%;border:4px solid #1e633f99;border-radius:50%; }
+    .coords { position:absolute;font-size:10px;font-weight:700;opacity:.75;left:5px;top:4px;pointer-events:none; }
+    .side { display:flex;flex-direction:column;gap:16px; }
+    .status { padding:13px 14px;background:#0c1627;border:1px solid #293951;border-radius:12px;font-weight:650; }
+    .status small { display:block;color:var(--muted);font-weight:400;margin-top:4px; }
+    .controls { display:grid;grid-template-columns:1fr 1fr;gap:9px; }
+    button,select { border:1px solid #344760;background:#1a2a42;color:var(--text);border-radius:10px;padding:11px 12px;font:inherit;font-size:14px;cursor:pointer; }
+    button:hover { border-color:var(--accent);background:#223956 }
+    button.primary { background:#3867aa;border-color:#5688d0; }
+    label { display:flex;flex-direction:column;gap:7px;color:var(--muted);font-size:13px; }
+    select { width:100%;color:var(--text); }
+    .section-title { font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);font-weight:700; }
+    .moves { min-height:100px;max-height:190px;overflow:auto;background:#0c1627;border:1px solid #293951;border-radius:12px;padding:10px;font:13px/1.8 ui-monospace,SFMono-Regular,monospace;color:#d8e4f7; }
+    .move-row { display:grid;grid-template-columns:28px 1fr 1fr;gap:8px; }
+    .move-num { color:#71839c; }
+    .hint { color:var(--muted);font-size:12px;line-height:1.55; }
+    footer { text-align:center;color:#71839c;font-size:12px;margin:18px 0 0; }
+    @media(max-width:800px) { .layout{grid-template-columns:1fr;max-width:620px;margin:auto} header{max-width:620px;margin:0 auto 18px}.side{display:grid;grid-template-columns:1fr 1fr}.status,.moves-wrap,.hint{grid-column:1/-1} }
+    @media(max-width:430px) { body{padding:15px 10px}.board-wrap,.side{padding:10px;border-radius:15px}.side{display:flex}.square{font-size:clamp(23px,8vw,38px)} }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <div class="brand"><div class="logo">♞</div><div><h1>Chess</h1><div class="sub">A browser-based chess game · Built with HTML, CSS & JavaScript</div></div></div>
+      <div class="sub">♟ Standard chess rules</div>
+    </header>
+    <section class="layout">
+      <div class="board-wrap"><div id="board" class="board" aria-label="Chess board"></div></div>
+      <aside class="side">
+        <div id="status" class="status">White to move<small>Select a piece to see legal moves.</small></div>
+        <div>
+          <div class="section-title" style="margin-bottom:9px">Game controls</div>
+          <div class="controls">
+            <button class="primary" id="new">New game</button>
+            <button id="undo">Undo move</button>
+            <button id="flip">Flip board</button>
+            <button id="mode">Mode: vs computer</button>
+          </div>
+        </div>
+        <label>Computer difficulty
+          <select id="difficulty"><option value="1">Easy</option><option value="2" selected>Medium</option><option value="3">Hard</option></select>
+        </label>
+        <div class="moves-wrap">
+          <div class="section-title" style="margin-bottom:9px">Move history</div>
+          <div id="moves" class="moves">Moves will appear here.</div>
+        </div>
+        <div class="hint">How to play: click or tap one of your pieces, then choose a highlighted square. In computer mode, you play as White. Use “Mode” to switch to local two-player.</div>
+      </aside>
+    </section>
+    <footer>Made as a personal coding project · Powered by JavaScript and chess.js</footer>
+  </main>
+<script type="module">
+let Chess;
+try {
+  ({ Chess } = await import("https://cdn.jsdelivr.net/npm/chess.js@1.4.0/dist/esm/chess.js"));
+} catch (primaryError) {
+  try {
+    ({ Chess } = await import("https://esm.sh/chess.js@1.4.0"));
+  } catch (fallbackError) {
+    const status = document.getElementById("status");
+    status.textContent = "The chess rules library could not be downloaded. Connect to the internet, then reload this page.";
+    document.getElementById("board").innerHTML =
+      '<div style="grid-column:1/-1;display:grid;place-items:center;padding:24px;text-align:center;color:#91a0b8">Internet connection is required for the chess rules library.</div>';
+    throw fallbackError;
+  }
+}
+(() => {
+  const game = new Chess();
+  const boardEl = document.getElementById("board");
+  const statusEl = document.getElementById("status");
+  const movesEl = document.getElementById("moves");
+  const difficultyEl = document.getElementById("difficulty");
+  const glyph = { wk:"♔", wq:"♕", wr:"♖", wb:"♗", wn:"♘", wp:"♙", bk:"♚", bq:"♛", br:"♜", bb:"♝", bn:"♞", bp:"♟" };
+  let selected = null, legalForSelected = [], flipped = false, vsComputer = true, thinking = false;
+  let lastMove = null, history = [];
+
+  const files = "abcdefgh";
+  function squareName(row,col) { return files[col] + (8-row); }
+  function render() {
+    boardEl.innerHTML = "";
+    const rows = [...Array(8).keys()];
+    const cols = [...Array(8).keys()];
+    if (flipped) { rows.reverse(); cols.reverse(); }
+    const checkKing = game.isCheck() ? game.board().flat().findIndex(p => p && p.type === "k" && p.color === game.turn()) : -1;
+    const kingSquare = game.isCheck() ? game.board().flatMap((r,ri)=>r.map((p,ci)=>p && p.type==="k" && p.color===game.turn()?squareName(ri,ci):null)).flat().find(Boolean) : null;
+    for (const r of rows) for (const c of cols) {
+      const sq = squareName(r,c), piece = game.get(sq);
+      const div = document.createElement("div");
+      div.className = "square " + ((r+c)%2===0 ? "light":"dark");
+      if (selected === sq) div.classList.add("selected");
+      if (lastMove && (lastMove.from===sq || lastMove.to===sq)) div.classList.add("last");
+      if (kingSquare === sq) div.classList.add("checked");
+      if (legalForSelected.some(m=>m.to===sq)) div.classList.add(game.get(sq) ? "capture":"target");
+      if (c === (flipped?7:0)) { const coord=document.createElement("span");coord.className="coords";coord.textContent=String(8-r);div.appendChild(coord); }
+      if (r === (flipped?0:7)) { const coord=document.createElement("span");coord.className="coords";coord.style.left="auto";coord.style.top="auto";coord.style.right="5px";coord.style.bottom="3px";coord.textContent=files[c];div.appendChild(coord); }
+      if (piece) {
+        const span=document.createElement("span");span.className="piece "+(piece.color==="w"?"white-piece":"black-piece");
+        span.textContent=glyph[piece.color+piece.type];div.appendChild(span);
+      }
+      div.addEventListener("click",()=>handleSquare(sq));
+      boardEl.appendChild(div);
+    }
+    updateStatus(); updateMoves();
+  }
+  function updateStatus() {
+    let message = game.turn()==="w" ? "White to move" : "Black to move";
+    let detail = vsComputer ? (game.turn()==="w" ? "Your turn — you are White." : "Computer's turn.") : "Local two-player game.";
+    if (game.isCheckmate()) { message = "Checkmate"; detail = (game.turn()==="w"?"Black":"White")+" wins!"; }
+    else if (game.isDraw()) { message = "Draw"; detail = game.isStalemate()?"Stalemate.":game.isThreefoldRepetition()?"Threefold repetition.":game.isInsufficientMaterial()?"Insufficient material.":"Draw by 50-move rule."; }
+    else if (game.isCheck()) { message += " · Check!"; detail = "The king is under attack."; }
+    if (thinking) { message="Computer is thinking…"; detail="Finding a move."; }
+    statusEl.innerHTML = ""; statusEl.append(document.createTextNode(message));
+    const small=document.createElement("small");small.textContent=detail;statusEl.appendChild(small);
+  }
+  function updateMoves() {
+    const historySan=game.history();
+    if (!historySan.length) { movesEl.textContent="Moves will appear here.";return; }
+    movesEl.innerHTML="";
+    for(let i=0;i<historySan.length;i+=2){
+      const row=document.createElement("div");row.className="move-row";
+      const n=document.createElement("span");n.className="move-num";n.textContent=(Math.floor(i/2)+1)+".";
+      const w=document.createElement("span");w.textContent=historySan[i];
+      const b=document.createElement("span");b.textContent=historySan[i+1]||"";
+      row.append(n,w,b);movesEl.appendChild(row);
+    }
+    movesEl.scrollTop=movesEl.scrollHeight;
+  }
+  function handleSquare(sq) {
+    if (thinking || game.isGameOver() || (vsComputer && game.turn()==="b")) return;
+    const piece=game.get(sq);
+    if (selected) {
+      const candidate=legalForSelected.find(m=>m.to===sq);
+      if (candidate) {
+        let promotion="q";
+        if(candidate.flags.includes("p")) {
+          const answer=prompt("Promote pawn to: queen (q), rook (r), bishop (b), or knight (n)?","q");
+          promotion=(answer||"q").toLowerCase();
+          if(!["q","r","b","n"].includes(promotion)) promotion="q";
+        }
+        const move=game.move({from:selected,to:sq,promotion});
+        if(move){ lastMove={from:move.from,to:move.to};history.push(game.fen());selected=null;legalForSelected=[];render();if(vsComputer&&game.turn()==="b"&&!game.isGameOver())setTimeout(computerMove,180);return; }
+      }
+    }
+    if(piece && piece.color===game.turn()) {
+      selected=sq;legalForSelected=game.moves({square:sq,verbose:true});
+    } else { selected=null;legalForSelected=[]; }
+    render();
+  }
+  const values={p:100,n:320,b:335,r:500,q:900,k:20000};
+  function evaluate() {
+    let score=0;
+    const b=game.board();
+    for(let r=0;r<8;r++) for(let c=0;c<8;c++) {
+      const p=b[r][c]; if(!p)continue;
+      let v=values[p.type];
+      const center=3.5-(Math.abs(r-3.5)+Math.abs(c-3.5))/2;
+      if(p.type==="n"||p.type==="b")v+=center*8;
+      if(p.type==="p")v+=(p.color==="w"?(6-r):(r-1))*5;
+      score+=(p.color==="w"?v:-v);
+    }
+    return score;
+  }
+  function minimax(depth,alpha,beta,maximizing) {
+    if(depth===0||game.isGameOver()) return evaluate();
+    const moves=game.moves({verbose:true});
+    moves.sort((a,b)=>(b.captured?values[b.captured]:0)-(a.captured?values[a.captured]:0));
+    if(maximizing) {
+      let best=-Infinity;
+      for(const m of moves){game.move(m);const val=minimax(depth-1,alpha,beta,false);game.undo();best=Math.max(best,val);alpha=Math.max(alpha,best);if(beta<=alpha)break;}
+      return best;
+    } else {
+      let best=Infinity;
+      for(const m of moves){game.move(m);const val=minimax(depth-1,alpha,beta,true);game.undo();best=Math.min(best,val);beta=Math.min(beta,best);if(beta<=alpha)break;}
+      return best;
+    }
+  }
+  function computerMove() {
+    if(game.isGameOver()||game.turn()!=="b")return;
+    thinking=true;updateStatus();
+    setTimeout(()=>{
+      const depth=Number(difficultyEl.value);
+      const moves=game.moves({verbose:true});
+      let best=[],bestScore=Infinity;
+      for(const m of moves){
+        game.move(m);const score=minimax(depth-1,-Infinity,Infinity,true);game.undo();
+        if(score<bestScore){bestScore=score;best=[m];}else if(score===bestScore)best.push(m);
+      }
+      const choice=best[Math.floor(Math.random()*best.length)];
+      if(choice){const played=game.move({from:choice.from,to:choice.to,promotion:choice.promotion||"q"});lastMove={from:played.from,to:played.to};}
+      thinking=false;selected=null;legalForSelected=[];render();
+    },30);
+  }
+  document.getElementById("new").addEventListener("click",()=>{game.reset();selected=null;legalForSelected=[];lastMove=null;history=[];thinking=false;render();});
+  document.getElementById("undo").addEventListener("click",()=>{
+    if(thinking)return;
+    if(game.history().length){game.undo();if(vsComputer&&game.turn()==="b"&&game.history().length)game.undo();}
+    selected=null;legalForSelected=[];const h=game.history({verbose:true});lastMove=h.length?{from:h[h.length-1].from,to:h[h.length-1].to}:null;render();
+  });
+  document.getElementById("flip").addEventListener("click",()=>{flipped=!flipped;render();});
+  document.getElementById("mode").addEventListener("click",()=>{
+    vsComputer=!vsComputer;document.getElementById("mode").textContent=vsComputer?"Mode: vs computer":"Mode: two-player";
+    game.reset();selected=null;legalForSelected=[];lastMove=null;render();
+  });
+  render();
+})();
+</script>
+</body>
+</html>
